@@ -1,0 +1,22 @@
+# 密钥
+.env
+
+# 历史版本与杂物归档（不上传）
+_attic/
+
+# 数据集与数据库（体积大，按 README 说明自行下载并重建）
+data/
+*.db
+*.zip
+
+# 环境
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.streamlit/
+
+# 其他
+*.pdf
+.DS_Store
