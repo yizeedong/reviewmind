@@ -197,8 +197,9 @@ def ask_agent(question, history=None):
         trace["usage"]["call1"] = _usage_dict(response)
 
         if not msg.tool_calls:
-            trace["conclusion"] = msg.content or "模型没有生成查询。"
-            trace["error"] = "no_tool_call"
+            clean, leaked = _sanitize_conclusion(msg.content or "")
+            trace["conclusion"] = clean or "模型没有生成查询。"
+            trace["error"] = "tool_call_as_text" if leaked else "no_tool_call"
             trace["latency_ms"] = int((time.time() - started) * 1000)
             return trace
 
@@ -242,7 +243,10 @@ def ask_agent(question, history=None):
         final_response = client.chat.completions.create(
             model=MODEL, messages=messages, temperature=0.3
         )
-        trace["conclusion"] = final_response.choices[0].message.content or ""
+        clean, leaked = _sanitize_conclusion(final_response.choices[0].message.content or "")
+        trace["conclusion"] = clean
+        if leaked:
+            trace["error"] = "tool_call_as_text"
         trace["usage"]["call2"] = _usage_dict(final_response)
 
     except Exception as e:  # 任何异常都落进轨迹，方便评测归因
@@ -250,6 +254,24 @@ def ask_agent(question, history=None):
 
     trace["latency_ms"] = int((time.time() - started) * 1000)
     return trace
+
+
+_TOOL_MARKUP = ("<｜｜DSML｜｜", "<|DSML|>", "DSML")
+
+
+def _sanitize_conclusion(text):
+    """模型偶尔把工具调用写成正文（比如 DeepSeek 的 DSML 标记），不能当结论展示给用户。
+
+    返回 (清干净的结论, 是否发现泄漏)。
+    """
+    if not text:
+        return text, False
+    for marker in _TOOL_MARKUP:
+        idx = text.find(marker)
+        if idx >= 0:
+            head = text[:idx].rstrip(" <｜|:：\n")
+            return head, True
+    return text, False
 
 
 def trace_to_jsonable(trace):
